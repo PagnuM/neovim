@@ -13,6 +13,7 @@ return {
   dependencies = {
     -- Creates a beautiful debugger UI
     'rcarriga/nvim-dap-ui',
+    'nvim-neotest/nvim-nio',
 
     -- Installs the debug adapters for you
     'williamboman/mason.nvim',
@@ -26,38 +27,15 @@ return {
     local dapui = require 'dapui'
 
     require('mason-nvim-dap').setup {
-      -- Makes a best effort to setup the various debuggers with
-      -- reasonable debug configurations
+      automatic_installation = false,
       automatic_setup = true,
-
-      -- You can provide additional configuration to the handlers,
-      -- see mason-nvim-dap README for more information
       handlers = {},
-
-      -- You'll need to check that you have the required things installed
-      -- online, please don't ask me how to install them :)
       ensure_installed = {
-        -- Update this to ensure that you have the debuggers for the langs you want
         'delve',
+        'js-debug-adapter',
       },
     }
-
-    -- Basic debugging keymaps, feel free to change to your liking!
-    vim.keymap.set('n', '<F5>', dap.continue, { desc = 'Debug: Start/Continue' })
-    vim.keymap.set('n', '<F1>', dap.step_into, { desc = 'Debug: Step Into' })
-    vim.keymap.set('n', '<F2>', dap.step_over, { desc = 'Debug: Step Over' })
-    vim.keymap.set('n', '<F3>', dap.step_out, { desc = 'Debug: Step Out' })
-    vim.keymap.set('n', '<leader>b', dap.toggle_breakpoint, { desc = 'Debug: Toggle Breakpoint' })
-    vim.keymap.set('n', '<leader>B', function()
-      dap.set_breakpoint(vim.fn.input 'Breakpoint condition: ')
-    end, { desc = 'Debug: Set Breakpoint' })
-
-    -- Dap UI setup
-    -- For more information, see |:help nvim-dap-ui|
     dapui.setup {
-      -- Set icons to characters that are more likely to work in every terminal.
-      --    Feel free to remove or use ones that you like more! :)
-      --    Don't feel like these are good choices.
       icons = { expanded = '▾', collapsed = '▸', current_frame = '*' },
       controls = {
         icons = {
@@ -74,14 +52,72 @@ return {
       },
     }
 
-    -- Toggle to see last session result. Without this, you can't see session output in case of unhandled exception.
-    vim.keymap.set('n', '<F7>', dapui.toggle, { desc = 'Debug: See last session result.' })
-
     dap.listeners.after.event_initialized['dapui_config'] = dapui.open
     dap.listeners.before.event_terminated['dapui_config'] = dapui.close
     dap.listeners.before.event_exited['dapui_config'] = dapui.close
 
+    ---@param keybinds string[]
+    ---@param fn string|function
+    ---@param desc string
+    local multi_map = function(keybinds, fn, desc)
+      for _, key in ipairs(keybinds) do
+        vim.keymap.set('n', key, fn, { desc = desc })
+      end
+    end
+
+    multi_map({ '<F5>', '<leader>dc' }, dap.continue, 'Debug: Start/Continue')
+    multi_map({ '<F6>', '<leader>dp' }, dap.pause, 'Debug: Pause')
+    multi_map({ '<C-F5>', '<leader>dr' }, dap.restart, 'Debug: Restart')
+
+    multi_map({ '<F11>', '<leader>di' }, dap.step_into, 'Debug: Step Into')
+    multi_map({ '<F10>', '<leader>do' }, dap.step_over, 'Debug: Step Over')
+    multi_map({ '<S-F11>', '<leader>dO' }, dap.step_out, 'Debug: Step Out')
+
+    vim.keymap.set('n', '<leader>dB', dap.clear_breakpoints, { desc = 'Debug: Clear Breakpoints' })
+    multi_map({ '<F9>', '<leader>db' }, dap.toggle_breakpoint, 'Debug: Toggle Breakpoint')
+    multi_map({ '<S-F9>', '<leader>dC' }, function()
+      dap.set_breakpoint(vim.fn.input 'Breakpoint condition: ')
+    end, 'Debug: Set Breakpoint')
+
+    vim.keymap.set('n', '<leader>ds', dap.run_to_cursor, { desc = 'Debug: Run to Cursor' })
+    vim.keymap.set('n', '<leader>dq', dap.close, { desc = 'Debug: Close session' })
+    multi_map({ '<S-F5>', '<leader>dQ' }, dap.terminate, 'Debug: Terminate session')
+
+    vim.keymap.set('n', '<leader>dR', dap.repl.toggle, { desc = 'Debug: Close session' })
+
+    -- Toggle to see last session result. Without this, you can't see session output in case of unhandled exception.
+    vim.keymap.set('n', '<leader>du', dapui.toggle, { desc = 'Debug: Toggle UI' })
+
+    vim.keymap.set('n', '<leader>dE', function()
+      vim.ui.input({ prompt = 'Expression: ' }, function(expr)
+        if expr then
+          require('dapui').eval(expr, { enter = true })
+        end
+      end)
+    end, { desc = 'Debug: Evaluate Expression' })
+
     -- Install golang specific config
     require('dap-go').setup()
+
+    dap.adapters['pwa-node'] = {
+      type = 'server',
+      host = 'localhost',
+      port = 8123,
+      executable = {
+        command = 'js-debug-adapter',
+      },
+    }
+
+    for _, language in ipairs { 'typescript', 'javascript' } do
+      dap.configurations[language] = {
+        {
+          type = 'pwa-node',
+          request = 'launch',
+          name = 'Launch file',
+          program = '${file}',
+          cwd = '${workspaceFolder}',
+        },
+      }
+    end
   end,
 }
