@@ -31,8 +31,8 @@ return {
       automatic_setup = true,
       handlers = {},
       ensure_installed = {
-        'delve',
         'js-debug-adapter',
+        'delve',
       },
     }
     dapui.setup {
